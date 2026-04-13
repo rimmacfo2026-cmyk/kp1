@@ -1,0 +1,580 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { TrendingUp, AlertTriangle, Bot, Zap, ArrowRight, ShieldCheck, Clock, CheckCircle2, Calculator, LineChart } from 'lucide-react';
+
+// базовые вводные данные виртуальной компании (в рублях)
+const BASE_REVENUE = 15000000;
+const BASE_FOT = 6000000;
+const BASE_VAR_COSTS = 5000000; 
+const BASE_FIX_COSTS = 2000000;
+
+// стоимость услуг (гипотеза для расчета)
+const TARIFFS = [
+  { name: 'Базовый', price: 80000, desc: 'учет и контроль: дашборды, регулярные отчеты' },
+  { name: 'Бизнес', price: 150000, desc: 'аналитика: предиктивные модели, планерки', isPopular: true },
+  { name: 'AI-Партнер', price: 300000, desc: 'стратегия: полная оцифровка, советы директоров' }
+];
+const SETUP_COST = 300000;
+
+const App = () => {
+  // стейты ползунков (в процентах отклонения от базы)
+  const [priceChange, setPriceChange] = useState(0);
+  const [fotChange, setFotChange] = useState(0);
+  const [marketingChange, setMarketingChange] = useState(0);
+  
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  // эффект "думающего AI" при изменении параметров
+  useEffect(() => {
+    setIsSimulating(true);
+    const timer = setTimeout(() => setIsSimulating(false), 400);
+    return () => clearTimeout(timer);
+  }, [priceChange, fotChange, marketingChange]);
+
+  // расчет текущей (базовой) и новой бизнес-модели
+  const baseData = useMemo(() => {
+    const costs = BASE_FOT + BASE_VAR_COSTS + BASE_FIX_COSTS;
+    const profit = BASE_REVENUE - costs;
+    return {
+      revenue: BASE_REVENUE,
+      costs: costs,
+      profit: profit,
+      margin: (profit / BASE_REVENUE) * 100
+    };
+  }, []);
+
+  const projectedData = useMemo(() => {
+    // выделяем маркетинговый бюджет (гипотеза: 2 млн из 5 млн переменных расходов)
+    const baseMarketingCost = 2000000;
+    const baseOtherVarCosts = 3000000;
+    
+    let revenueMultiplier = 1 + (marketingChange / 100);
+    let marketingCostMultiplier = 1 + (marketingChange / 100);
+
+    // если ползунок маркетинга в минусе - имитируем работу финдира (срезаем мусорный трафик, выручка не падает)
+    if (marketingChange < 0) {
+      revenueMultiplier = 1; 
+    }
+    
+    const revenueWithMarketing = BASE_REVENUE * revenueMultiplier;
+    
+    // влияние цены
+    const priceMultiplier = 1 + (priceChange / 100);
+    const finalRevenue = revenueWithMarketing * priceMultiplier;
+    
+    // косты
+    const currentFot = BASE_FOT * (1 + (fotChange / 100));
+    const currentMarketingCost = baseMarketingCost * marketingCostMultiplier;
+    const currentOtherVarCosts = baseOtherVarCosts * revenueMultiplier; 
+    
+    const totalCosts = currentFot + currentMarketingCost + currentOtherVarCosts + BASE_FIX_COSTS;
+    
+    const profit = finalRevenue - totalCosts;
+    const margin = (profit / finalRevenue) * 100;
+
+    return {
+      revenue: finalRevenue,
+      costs: totalCosts,
+      profit,
+      margin
+    };
+  }, [priceChange, fotChange, marketingChange]);
+
+  // форматирование денег
+  const formatMoney = (val) => {
+    return new Intl.NumberFormat('ru-RU', { 
+      style: 'currency', 
+      currency: 'RUB',
+      maximumFractionDigits: 0
+    }).format(val);
+  };
+
+  // анализ от "AI"
+  const getAiInsight = () => {
+    const profitDiff = projectedData.profit - baseData.profit;
+
+    if (projectedData.profit < 0) {
+      return {
+        type: 'danger',
+        icon: <AlertTriangle className="w-5 h-5 text-red-500" />,
+        title: 'критический риск кассового разрыва',
+        text: `при таких вводных бизнес уходит в минус на ${formatMoney(Math.abs(projectedData.profit))} в месяц. стандартная бухгалтерия скажет об этом постфактум, когда деньги на счетах закончатся. AI-модель прогнозирует это за миллисекунды.`
+      };
+    }
+    if (profitDiff > 0 && priceChange > 0) {
+      return {
+        type: 'success',
+        icon: <Zap className="w-5 h-5 text-emerald-500" />,
+        title: 'найден скрытый рычаг прибыли',
+        text: `вы увеличили цены. обратите внимание: рост цен всего на ${priceChange}% дает непропорциональный рост прибыли на ${Math.round((profitDiff/baseData.profit)*100)}%. это эффект операционного рычага, который мы находим в 90% бизнесов.`
+      };
+    }
+    if (fotChange > 0 && profitDiff < 0) {
+       return {
+        type: 'warning',
+        icon: <TrendingUp className="w-5 h-5 text-amber-500" />,
+        title: 'опасность раздувания ФОТ',
+        text: `рост штата съедает вашу маржу. вы будете больше работать, больше продавать, но забирать в карман меньше денег. наш AI-аудит покажет, кого из команды пора заменить на автоматизацию.`
+      };
+    }
+    if (marketingChange < 0 && profitDiff > 0) {
+       return {
+        type: 'success',
+        icon: <ShieldCheck className="w-5 h-5 text-emerald-500" />,
+        title: 'отсечение слива бюджета',
+        text: `вы убрали ${Math.abs(marketingChange)}% маркетингового бюджета. благодаря сквозной аналитике мы срезаем только неработающие связки, поэтому выручка не упала, а чистая прибыль выросла.`
+      };
+    }
+    if (fotChange < 0 && profitDiff > 0) {
+       return {
+        type: 'success',
+        icon: <Bot className="w-5 h-5 text-emerald-500" />,
+        title: 'оптимизация команды',
+        text: `вы сократили фот на ${Math.abs(fotChange)}%. внедрение правильного учета позволяет найти дублирующиеся функции и заменить их на автоматизацию, увеличивая рентабельность.`
+      };
+    }
+    
+    return {
+      type: 'neutral',
+      icon: <Bot className="w-5 h-5 text-blue-500" />,
+      title: 'система работает стабильно',
+      text: 'сейчас показатели в норме. подвигайте ползунки, чтобы протестировать стресс-сценарии. в реальности переменных не 3, а более 150, и мы отслеживаем их все в реальном времени.'
+    };
+  };
+
+  const insight = getAiInsight();
+
+  // расчет окупаемости (ROI) - это гипотеза, а не факт для каждого бизнеса
+  const roiData = useMemo(() => {
+    const extraProfit = projectedData.profit - baseData.profit;
+    
+    // всегда возвращаем данные, даже если прибыли нет
+    const annualExtraProfit = extraProfit > 0 ? extraProfit * 12 : 0;
+    const setupPaybackMonths = extraProfit > 0 ? SETUP_COST / extraProfit : null;
+    
+    return {
+      extraProfit: extraProfit > 0 ? extraProfit : 0,
+      annualExtraProfit,
+      setupPaybackMonths: setupPaybackMonths ? (setupPaybackMonths < 1 ? '< 1' : setupPaybackMonths.toFixed(1)) : '∞'
+    };
+  }, [projectedData, baseData]);
+
+  // компоненты UI
+  const Slider = ({ label, value, setter, min, max, unit = "%" }) => (
+    <div className="mb-6">
+      <div className="flex justify-between mb-2">
+        <label className="text-sm font-semibold text-slate-300">{label}</label>
+        <span className={`text-sm font-bold ${value > 0 ? 'text-cyan-400' : value < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+          {value > 0 ? '+' : ''}{value}{unit}
+        </span>
+      </div>
+      <input 
+        type="range" 
+        min={min} 
+        max={max} 
+        value={value} 
+        onChange={(e) => setter(Number(e.target.value))}
+        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500 hover:accent-cyan-400 transition-all"
+      />
+      <div className="flex justify-between mt-1 text-xs text-slate-500 font-medium">
+        <span>{min}{unit}</span>
+        <span>{max}{unit}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-950 font-sans text-slate-200 selection:bg-cyan-900 relative overflow-hidden">
+      
+      {/* AI Glow Background Effects */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[500px] bg-cyan-900/20 blur-[120px] rounded-full pointer-events-none"></div>
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-blue-900/20 blur-[150px] rounded-full pointer-events-none"></div>
+
+      {/* Header */}
+      <header className="relative border-b border-slate-800/50 pt-10 pb-16 px-4 md:px-8 bg-slate-950/50 backdrop-blur-md z-10">
+        <div className="max-w-5xl mx-auto text-center">
+          <div className="inline-flex items-center justify-center space-x-2 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 px-4 py-2 rounded-full text-sm font-semibold mb-6 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+            <Bot className="w-4 h-4" />
+            <span>Интерактивное коммерческое предложение</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-6">
+            Сколько чистой прибыли вы теряете, <br className="hidden md:block"/>
+            пока <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">ждете отчеты от бухгалтерии?</span>
+          </h1>
+          <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
+            хватит управлять бизнесом вслепую. протестируйте нашу AI-симуляцию: 
+            подвигайте рычаги управления и узнайте, как решения изменят ваш счет, а также оцените окупаемость нашей работы.
+          </p>
+        </div>
+      </header>
+
+      {/* Main Interactive Section */}
+      <main className="max-w-5xl mx-auto px-4 -mt-8 relative z-20 pb-20">
+        <div className="bg-slate-900 rounded-2xl shadow-2xl shadow-black border border-slate-800 overflow-hidden flex flex-col lg:flex-row backdrop-blur-xl">
+          
+          {/* Controls Panel */}
+          <div className="w-full lg:w-1/3 bg-slate-900/80 p-6 md:p-8 border-r border-slate-800 relative">
+            <div className="mb-8">
+              <h3 className="text-lg font-bold text-white flex items-center">
+                <Zap className="w-5 h-5 mr-2 text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                Панель управления
+              </h3>
+              <p className="text-sm text-slate-400 mt-1">
+                введите гипотетические изменения:
+              </p>
+            </div>
+
+            <Slider label="Цены на ваши услуги" value={priceChange} setter={setPriceChange} min={-20} max={30} />
+            <Slider label="Фонд оплаты труда (ФОТ)" value={fotChange} setter={setFotChange} min={-30} max={50} />
+            <Slider label="Маркетинг и продажи" value={marketingChange} setter={setMarketingChange} min={-50} max={100} />
+
+            <div className="mt-8 pt-6 border-t border-slate-800">
+              <div className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">Базовые метрики:</div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Текущая выручка:</span>
+                  <span className="font-semibold text-white">15.0 млн ₽</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Текущая прибыль:</span>
+                  <span className="font-semibold text-white">2.0 млн ₽</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Chart & AI Panel */}
+          <div className="w-full lg:w-2/3 p-6 md:p-8 bg-slate-950/50 flex flex-col relative">
+            {/* Сетка на фоне графика для технологичности */}
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none"></div>
+
+            <div className="flex justify-between items-end mb-8 relative z-10">
+              <div>
+                <h3 className="text-lg font-bold text-white">Сравнение: Было / Стало</h3>
+                <p className="text-sm text-cyan-500 mt-1 animate-pulse">ai-анализ в реальном времени...</p>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Новая прибыль:</div>
+                <div className={`text-3xl font-black drop-shadow-md transition-colors ${projectedData.profit >= 0 ? 'text-cyan-400' : 'text-rose-500'}`}>
+                  {formatMoney(projectedData.profit)}
+                </div>
+              </div>
+            </div>
+
+            {/* Enhanced Chart & Data Table (До/После) */}
+            {(() => {
+              const maxExpectedProfit = Math.max(10000000, Math.abs(baseData.profit) * 1.1, Math.abs(projectedData.profit) * 1.1);
+              const baseHeight = Math.max(0, Math.min(100, (baseData.profit / maxExpectedProfit) * 100));
+              const projHeight = Math.max(0, Math.min(100, (Math.abs(projectedData.profit) / maxExpectedProfit) * 100));
+              const isProjPositive = projectedData.profit >= 0;
+
+              return (
+                <div className="flex-1 relative min-h-[280px] flex flex-col z-10 mt-2">
+                  
+                  {/* Chart Graphic Area */}
+                  <div className="flex-1 relative flex items-end justify-center space-x-8 md:space-x-20 border-b border-slate-700 pb-2 px-4">
+                    
+                    {/* Линия нулевой прибыли (если уходим в минус) */}
+                    <div className="absolute w-full left-0 border-t border-slate-700 pointer-events-none z-0" style={{ bottom: '0%' }}></div>
+
+                    {/* Линия базовой прибыли */}
+                    <div 
+                      className="absolute w-full left-0 border-t-2 border-dashed border-slate-600/60 pointer-events-none flex items-end pb-1 z-0 transition-all duration-500"
+                      style={{ bottom: `${baseHeight}%`, height: '1px' }}
+                    >
+                      <span className="text-[10px] text-slate-400 bg-slate-950/80 px-2 rounded-full ml-2">база: {formatMoney(baseData.profit)}</span>
+                    </div>
+
+                    {/* Столбик: Было */}
+                    <div className="w-full max-w-[100px] flex flex-col items-center justify-end h-full relative group z-10">
+                      <div className="mb-2 text-xs md:text-sm font-bold whitespace-nowrap text-slate-400">
+                        {formatMoney(baseData.profit)}
+                      </div>
+                      <div 
+                        className="w-full rounded-t-md relative overflow-hidden bg-slate-700 shadow-[0_0_10px_rgba(0,0,0,0.5)] transition-all duration-500 ease-out"
+                        style={{ height: `${Math.max(baseHeight, 2)}%` }}
+                      >
+                        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
+                      </div>
+                    </div>
+
+                    {/* Столбик: Стало */}
+                    <div className="w-full max-w-[100px] flex flex-col items-center justify-end h-full relative group z-10">
+                      <div className={`mb-2 text-xs md:text-sm font-bold whitespace-nowrap transition-all ${isProjPositive ? 'text-cyan-400' : 'text-rose-400'}`}>
+                        {formatMoney(projectedData.profit)}
+                      </div>
+                      <div 
+                        className={`w-full rounded-t-md transition-all duration-500 ease-out relative overflow-hidden ${isProjPositive ? 'bg-gradient-to-t from-cyan-600 to-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-gradient-to-t from-rose-600 to-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.3)]'}`}
+                        style={{ 
+                          height: `${Math.max(projHeight, 2)}%`,
+                          opacity: isSimulating ? 0.5 : 1
+                        }}
+                      >
+                        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Ось X и мини-таблица показателей */}
+                  <div className="flex justify-center space-x-8 md:space-x-20 mt-2 pt-2 px-4">
+                    {/* Таблица: Было */}
+                    <div className="w-full max-w-[120px] flex flex-col items-center text-center">
+                      <div className="text-xs font-bold text-slate-400 mb-2 bg-slate-800/50 w-full py-1.5 rounded">Текущая модель</div>
+                      <div className="flex flex-col gap-1.5 text-[10px] text-slate-500 w-full">
+                        <div className="flex justify-between px-1">
+                          <span>выручка:</span>
+                          <span className="text-slate-300">{(baseData.revenue / 1000000).toFixed(1)}M</span>
+                        </div>
+                        <div className="flex justify-between px-1">
+                          <span>расходы:</span>
+                          <span className="text-slate-300">{(baseData.costs / 1000000).toFixed(1)}M</span>
+                        </div>
+                        <div className="flex justify-between px-1 font-semibold pt-1 border-t border-slate-800 text-slate-400">
+                          <span>маржа:</span>
+                          <span>{baseData.margin.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Таблица: Стало */}
+                    <div className="w-full max-w-[120px] flex flex-col items-center text-center">
+                      <div className="text-xs font-bold text-cyan-400 mb-2 bg-cyan-950/40 border border-cyan-900/50 w-full py-1.5 rounded shadow-[0_0_10px_rgba(6,182,212,0.1)]">AI-оптимизация</div>
+                      <div className="flex flex-col gap-1.5 text-[10px] text-slate-500 w-full">
+                        <div className="flex justify-between px-1">
+                          <span>выручка:</span>
+                          <span className="text-slate-300">{(projectedData.revenue / 1000000).toFixed(1)}M</span>
+                        </div>
+                        <div className="flex justify-between px-1">
+                          <span>расходы:</span>
+                          <span className="text-slate-300">{(projectedData.costs / 1000000).toFixed(1)}M</span>
+                        </div>
+                        <div className={`flex justify-between px-1 font-semibold pt-1 border-t border-slate-800 ${projectedData.margin > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                          <span>маржа:</span>
+                          <span>{projectedData.margin.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* AI Insight Box */}
+            <div className={`mt-6 p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 z-10 relative overflow-hidden ${
+              insight.type === 'danger' ? 'bg-rose-950/30 border-rose-900/50' :
+              insight.type === 'success' ? 'bg-cyan-950/30 border-cyan-900/50' :
+              insight.type === 'warning' ? 'bg-amber-950/30 border-amber-900/50' :
+              'bg-blue-950/30 border-blue-900/50'
+            }`}>
+              <div className="flex items-start relative z-10">
+                <div className="flex-shrink-0 mt-0.5">
+                  {insight.icon}
+                </div>
+                <div className="ml-3">
+                  <h4 className={`text-sm font-bold ${
+                    insight.type === 'danger' ? 'text-rose-400' :
+                    insight.type === 'success' ? 'text-cyan-400' :
+                    insight.type === 'warning' ? 'text-amber-400' :
+                    'text-blue-400'
+                  }`}>
+                    {insight.title}
+                  </h4>
+                  <p className={`text-sm mt-1 leading-relaxed ${
+                    insight.type === 'danger' ? 'text-rose-200/80' :
+                    insight.type === 'success' ? 'text-cyan-100/80' :
+                    insight.type === 'warning' ? 'text-amber-100/80' :
+                    'text-blue-100/80'
+                  }`}>
+                    {insight.text}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* ROI Section (теперь отображается всегда) */}
+            <div className="mt-8 pt-8 border-t border-slate-800/80 z-10 animate-fade-in">
+              <h3 className="text-xl font-bold text-white mb-6 flex items-center">
+                <Calculator className="w-5 h-5 mr-2 text-cyan-400" />
+                Финансовый результат внедрения
+              </h3>
+
+              {/* Главная цифра - новая прибыль */}
+              <div className="bg-gradient-to-br from-cyan-900/30 to-blue-900/20 p-6 rounded-2xl border border-cyan-800/50 mb-6 relative overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/20 blur-3xl rounded-full pointer-events-none"></div>
+                 <div className="text-sm text-cyan-400 font-semibold mb-2 uppercase tracking-wider relative z-10">Новая чистая прибыль бизнеса:</div>
+                 <div className="text-4xl font-black text-white relative z-10">
+                   {roiData.extraProfit > 0 ? '+' : ''}{formatMoney(roiData.annualExtraProfit)} <span className="text-lg text-slate-400 font-normal">/ за год</span>
+                 </div>
+                 <div className="text-sm text-slate-400 mt-2 relative z-10">
+                   {roiData.extraProfit > 0 ? (
+                     <>это <strong className="text-slate-200">+{formatMoney(roiData.extraProfit)}</strong> дополнительно каждый месяц к вашей текущей прибыли.</>
+                   ) : (
+                     <>подвигайте ползунки выше, чтобы смоделировать рост вашей прибыли.</>
+                   )}
+                 </div>
+              </div>
+
+              {/* Плашка окупаемости учета (разовая) */}
+              <div className="bg-slate-900/80 p-5 rounded-xl border border-slate-700 hover:border-slate-600 transition-colors mb-6">
+                 <div className="flex justify-between items-start mb-4">
+                   <div>
+                     <div className="text-sm text-slate-400 mb-1">Окупаемость внедрения учета</div>
+                     <div className="text-2xl font-bold text-blue-400">{roiData.setupPaybackMonths} {roiData.setupPaybackMonths === '∞' ? '' : 'мес.'}</div>
+                   </div>
+                   <div className="text-right">
+                     <div className="text-xs text-slate-500 mb-1">разово</div>
+                     <div className="text-sm font-semibold text-white">{formatMoney(SETUP_COST)}</div>
+                   </div>
+                 </div>
+                 {/* Визуализация окупаемости */}
+                 <div className="relative h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div 
+                      className="absolute top-0 left-0 h-full bg-blue-500 transition-all duration-500" 
+                      style={{ width: `${roiData.extraProfit > 0 ? Math.min(100, (SETUP_COST / (roiData.extraProfit * 12)) * 100) : 0}%` }}
+                    ></div>
+                 </div>
+              </div>
+
+              {/* 3 тарифа финдиректора */}
+              <div className="text-sm text-slate-300 font-semibold mb-3">Тарифы на сопровождение финдиректора:</div>
+              <div className="grid md:grid-cols-3 gap-4">
+                {TARIFFS.map((t, idx) => {
+                  const annualCost = t.price * 12;
+                  const cfoRoi = roiData.annualExtraProfit > 0 ? ((roiData.annualExtraProfit - annualCost) / annualCost) * 100 : 0;
+                  
+                  return (
+                    <div key={idx} className={`p-4 rounded-xl border transition-colors relative overflow-hidden ${t.isPopular ? 'bg-cyan-950/40 border-cyan-500/50' : 'bg-slate-900/80 border-slate-700 hover:border-slate-600'}`}>
+                       {t.isPopular && <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-cyan-500 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-b-md uppercase tracking-wider z-10">популярный</div>}
+                       
+                       <div className={`text-sm font-bold mb-1 mt-2 ${t.isPopular ? 'text-cyan-400' : 'text-slate-200'}`}>{t.name}</div>
+                       <div className="text-[10px] text-slate-400 min-h-[30px] mb-3 leading-tight">{t.desc}</div>
+                       
+                       <div className="flex justify-between items-end mb-3 pb-3 border-b border-slate-800">
+                         <div className="text-lg font-bold text-white">{formatMoney(t.price)}<span className="text-[10px] text-slate-500 font-normal">/мес</span></div>
+                       </div>
+                       
+                       <div>
+                         <div className="text-[10px] text-slate-400 mb-1">ROI тарифа:</div>
+                         <div className={`text-lg font-bold ${cfoRoi > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>{Math.round(cfoRoi)}%</div>
+                         
+                         {/* Шкала ROI */}
+                         <div className="relative h-1.5 bg-slate-800 rounded-full overflow-hidden flex w-full mt-2">
+                            <div 
+                              className="bg-slate-500 h-full transition-all duration-500" 
+                              style={{ width: `${roiData.extraProfit > 0 ? Math.max(5, Math.min(100, (t.price / roiData.extraProfit) * 100)) : 100}%` }} 
+                            ></div>
+                            <div className={`h-full flex-1 transition-all duration-500 ${cfoRoi > 0 ? 'bg-emerald-500' : 'bg-transparent'}`}></div>
+                         </div>
+                       </div>
+
+                       {/* Кнопка выбора тарифа */}
+                       <a 
+                         href={`https://t.me/rimma_gali?text=Здравствуйте! Выбираю тариф "${t.name}"`}
+                         target="_blank"
+                         rel="noopener noreferrer"
+                         className={`mt-5 w-full flex items-center justify-center py-2.5 px-4 rounded-xl text-sm font-bold transition-all ${
+                           t.isPopular 
+                             ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:scale-[1.02]' 
+                             : 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700 hover:scale-[1.02]'
+                         }`}
+                       >
+                         Выбираю тариф
+                       </a>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              <div className="text-xs text-slate-500 mt-5 text-center px-4">
+                *это гипотеза, основанная на введенных вами данных. точный финансовый план и тариф мы подберем после экспресс-аудита.
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </main>
+
+      {/* Value Proposition & CTA Section */}
+      <section className="max-w-4xl mx-auto px-4 pb-24 relative z-10">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-extrabold text-white mb-4">
+            Вы только что сделали то, на что у обычного отдела уходит 3 дня.
+          </h2>
+          <p className="text-lg text-slate-400">
+            в нашей симуляции всего 3 переменные. в вашем бизнесе их сотни: задержки оплат, сезонность, курсы валют.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-8 mb-12">
+          <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-sm">
+            <div className="w-12 h-12 bg-rose-950/50 rounded-xl flex items-center justify-center mb-4 border border-rose-900/50">
+              <Clock className="w-6 h-6 text-rose-500" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-200 mb-2">Классический подход</h3>
+            <ul className="space-y-3 mt-4">
+              <li className="flex items-start text-slate-400">
+                <span className="text-rose-500 mr-2">-</span>
+                отчеты собираются руками в Excel к 15 числу следующего месяца.
+              </li>
+              <li className="flex items-start text-slate-400">
+                <span className="text-rose-500 mr-2">-</span>
+                фокус на учете прошлого: констатация факта кассового разрыва.
+              </li>
+              <li className="flex items-start text-slate-400">
+                <span className="text-rose-500 mr-2">-</span>
+                решения интуитивны: данных не хватает.
+              </li>
+            </ul>
+          </div>
+
+          <div className="bg-gradient-to-br from-cyan-900/40 to-blue-900/40 p-6 rounded-2xl border border-cyan-800/50 relative overflow-hidden backdrop-blur-md shadow-[0_0_30px_rgba(6,182,212,0.1)]">
+            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-cyan-400 opacity-20 rounded-full blur-2xl"></div>
+            <div className="w-12 h-12 bg-cyan-950/80 rounded-xl flex items-center justify-center mb-4 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.5)]">
+              <LineChart className="w-6 h-6 text-cyan-400" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">AI-Финдиректор</h3>
+            <ul className="space-y-3 mt-4 relative z-10">
+              <li className="flex items-start text-cyan-100">
+                <CheckCircle2 className="w-5 h-5 mr-2 text-cyan-400 flex-shrink-0" />
+                дашборд обновляется автоматически каждый день.
+              </li>
+              <li className="flex items-start text-cyan-100">
+                <CheckCircle2 className="w-5 h-5 mr-2 text-cyan-400 flex-shrink-0" />
+                предиктивная аналитика: видим разрывы за 2 месяца.
+              </li>
+              <li className="flex items-start text-cyan-100">
+                <CheckCircle2 className="w-5 h-5 mr-2 text-cyan-400 flex-shrink-0" />
+                оцифровка воронок и расчет юнит-экономики без участия человека.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="bg-slate-900 rounded-3xl p-8 md:p-12 text-center relative overflow-hidden border border-slate-800 shadow-2xl shadow-cyan-900/20">
+           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-r from-cyan-600/10 to-blue-600/10 blur-[80px] rounded-full pointer-events-none"></div>
+           
+           <div className="relative z-10">
+            <h2 className="text-3xl font-bold text-white mb-4">
+              Готовы внедрить тотальный контроль финансов?
+            </h2>
+            <p className="text-slate-400 max-w-2xl mx-auto mb-8">
+              оставьте заявку на разбор. мы покажем 2 точки роста прибыли и рассчитаем точную окупаемость учета под вашу нишу.
+            </p>
+            <button className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 px-8 rounded-full inline-flex items-center transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] hover:scale-105">
+              Получить расчет окупаемости
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </button>
+            <p className="text-xs text-slate-500 mt-4">
+              конфиденциально. это ни к чему не обязывает.
+            </p>
+           </div>
+        </div>
+
+      </section>
+
+    </div>
+  );
+};
+
+export default App;
